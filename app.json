@@ -72,7 +72,8 @@
       "typedRoutes": true
     },
     "assetBundlePatterns": [
-      "**/*"
+      "**/*",
+      "assets/images/*"
     ],
     "extra": {
       "router": {
