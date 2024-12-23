@@ -1,21 +1,16 @@
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Video } from 'expo-av';
-import * as SplashScreen from 'expo-splash-screen';
+import { StyleSheet, View, Image } from 'react-native';
+import * as ExpoSplashScreen from 'expo-splash-screen';
 
 // Keep the splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync();
+ExpoSplashScreen.preventAutoHideAsync();
 
-export function CustomSplashScreen({ onLayoutRootView }: { onLayoutRootView: () => void }) {
+export default function SplashScreen({ onLayoutRootView }: { onLayoutRootView: () => void }) {
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
-      <Video
-        source={require('@/assets/splash-video.mp4')}
-        style={styles.video}
-        resizeMode="cover"
-        shouldPlay
-        isLooping={false}
-        isMuted={true}
+      <Image
+        source={require('../assets/images/audit-logo.png')}
+        style={styles.image}
+        resizeMode="contain"
       />
     </View>
   );
@@ -25,9 +20,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  video: {
-    flex: 1,
-    width: '100%',
+  image: {
+    width: '80%',
+    height: '80%',
   },
 }); 
