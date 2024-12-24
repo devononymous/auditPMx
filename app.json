@@ -1,81 +1,17 @@
 {
   "expo": {
-    "name": "auditPMx",
-    "slug": "auditPMx",
+    "name": "YourAppName",
+    "slug": "your-app-slug",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/audit-logo.png",
-    "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.auditpmx",
-      "buildNumber": "1.0.0",
-      "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to camera to take photos for audit entries.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to photos for audit entries."
-      }
+    "sdkVersion": "48.0.0",
+    "platforms": ["ios", "android"],
+    "entryPoint": "./src/index.tsx",
+    "assets": ["./assets/images/splashscreen_logo.png"],
+    "splash": {
+      "image": "./assets/images/splashscreen_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/audit-logo.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.yourcompany.auditpmx",
-      "versionCode": 1,
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.INTERNET",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ],
-      "softwareKeyboardLayoutMode": "pan",
-      "allowBackup": true,
-      "googleServicesFile": false
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/audit-logo.png"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
-        }
-      ],
-      [
-        "expo-file-system",
-        {
-          "filePermission": "This app needs access to file system to export data."
-        }
-      ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": false
-        }
-      ]
-    ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "assetBundlePatterns": [
-      "**/*",
-      "assets/images/*"
-    ],
-    "extra": {
-      "router": {
-        "origin": false
-      },
-      "eas": {
-        "projectId": "8454c035-605d-4c4e-b83d-17851359cbf4"
-      }
-    }
+    "scheme": "com.yourcompany.auditpmx"
   }
 }

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Image, StyleSheet } from 'react-native';
-import { TextInput, Button } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { Image, StyleSheet, Text } from 'react-native';
+import { Button, TextInput } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -202,7 +202,7 @@ export default function HomeScreen() {
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
       headerImage={
         <Image
-          source={require('@/assets/images/audit-logo.png')}
+          source={require('@/assets/images/splashscreen_logo.png')}
           style={styles.logoImage}
         />
       }>
