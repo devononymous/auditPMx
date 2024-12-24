@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/audit-logo.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.yourcompany.auditpmx",
@@ -31,24 +31,18 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.INTERNET",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "pan",
+      "allowBackup": true,
+      "googleServicesFile": false
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/audit-logo.png"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/audit-logo.png",
-          "imageResizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "hideExponentText": true
-        }
-      ],
       [
         "expo-image-picker",
         {
