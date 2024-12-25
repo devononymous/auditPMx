@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Image, StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import XLSX from 'xlsx';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 import { FormData } from '@/src/types';
 import { saveEntries, loadEntries } from '@/src/utils/storage';
@@ -38,49 +39,38 @@ const priorityConfig = {
   }
 };
 
+const getFileExtension = (filename: string) => {
+  return filename.slice((filename.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+};
+
 export default function HomeScreen() {
   const [formData, setFormData] = useState<FormData>(initialFormState);
   const [savedEntries, setSavedEntries] = useState<FormData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      try {
-        const entries = await loadEntries();
-        if (mounted) {
-          setSavedEntries(entries);
-        }
-      } catch (error) {
-        console.error('Error loading entries:', error);
-        if (mounted) {
-          alert('Failed to load saved entries');
-        }
-      }
-    };
-
     loadData();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  const validateImage = async () => {
+  const loadData = async () => {
+    try {
+      const entries = await loadEntries();
+      setSavedEntries(entries);
+    } catch (error) {
+      console.error('Error loading entries:', error);
+      alert('Failed to load saved entries');
+    }
+  };
+
+  const pickImage = async (sourceType: 'camera' | 'library') => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       alert('Sorry, we need camera roll permissions to make this work!');
-      return false;
+      return;
     }
-    return true;
-  };
 
-  const pickImage = async () => {
-    if (!(await validateImage())) return;
     setIsImageLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -91,10 +81,13 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled) {
-        setFormData(prev => ({
-          ...prev,
-          image: result.assets[0].uri
-        }));
+        const manipulatedImage = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 800 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        
+        setFormData(prev => ({ ...prev, image: manipulatedImage.uri }));
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -104,20 +97,12 @@ export default function HomeScreen() {
     }
   };
 
-  const validateForm = () => {
-    const errors = [];
-    if (!formData.slNo.trim()) errors.push('Serial Number');
-    if (!formData.location.trim()) errors.push('Location');
-    
-    if (errors.length > 0) {
-      alert(`Please fill in the following required fields:\n${errors.join('\n')}`);
-      return false;
-    }
-    return true;
-  };
-
   const handleSave = async () => {
-    if (!validateForm()) return;
+    if (!formData.slNo.trim() || !formData.location.trim()) {
+      alert('Please fill in the Serial Number and Location fields.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const newEntries = [...savedEntries, formData];
@@ -148,33 +133,57 @@ export default function HomeScreen() {
     }
     setIsExporting(true);
     try {
-      const exportData = savedEntries.map((entry, index) => ({
-        'Sl No': entry.slNo,
-        'Location': entry.location,
-        'Observation': entry.observation,
-        'Priority': entry.priority,
-        'Recommendation': entry.recommendation,
-        'Status': entry.status,
-        'Entry Date': new Date().toLocaleDateString()
+      const exportData = await Promise.all(savedEntries.map(async (entry) => {
+        let imageBase64 = '';
+        let imageExtension = '';
+        if (entry.image) {
+          const imageFile = await FileSystem.readAsStringAsync(entry.image, { encoding: FileSystem.EncodingType.Base64 });
+          imageExtension = getFileExtension(entry.image);
+          imageBase64 = `data:image/${imageExtension};base64,${imageFile}`;
+        }
+        return {
+          'Sl No': entry.slNo,
+          'Location': entry.location,
+          'Observation': entry.observation,
+          'Priority': entry.priority,
+          'Recommendation': entry.recommendation,
+          'Status': entry.status,
+          'Entry Date': new Date().toLocaleDateString(),
+          'Image': imageBase64
+        };
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Audit Entries');
       
-      const colWidths = [
-        { wch: 10 },
-        { wch: 20 },
-        { wch: 40 },
-        { wch: 15 },
-        { wch: 40 },
-        { wch: 20 },
-        { wch: 15 }
+      ws['!cols'] = [
+        { wch: 10 }, { wch: 20 }, { wch: 40 }, { wch: 15 },
+        { wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 50 }
       ];
-      ws['!cols'] = colWidths;
-      
+      ws['!rows'] = exportData.map(() => ({ hpt: 150 }));
+
+      exportData.forEach((entry, index) => {
+        if (entry.Image) {
+          const cellRef = XLSX.utils.encode_cell({ r: index + 1, c: 7 });
+          ws[cellRef] = {
+            t: 's',
+            v: 'Image',
+            s: { alignment: { vertical: 'center', horizontal: 'center' } }
+          };
+          const imageExtension = getFileExtension(entry.Image);
+          ws[cellRef].l = {
+            Target: entry.Image,
+            Tooltip: 'Click to view full image'
+          };
+          ws[cellRef].s = {
+            ...ws[cellRef].s,
+            fill: { fgColor: { rgb: "FFFFAA00" } }
+          };
+        }
+      });
+
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-      
       const fileName = `audit_entries_${new Date().toISOString().split('T')[0]}.xlsx`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
       
@@ -245,15 +254,25 @@ export default function HomeScreen() {
             placeholder="Enter your observations here"
           />
           
-          <ThemedText style={styles.fieldLabel}>Add Photo Evidence</ThemedText>
-          <Button 
-            mode="outlined" 
-            onPress={pickImage}
-            icon="camera"
-            style={styles.imageButton}
-          >
-            {formData.image ? 'Change Image' : 'Add Image'}
-          </Button>
+          <ThemedText style={styles.fieldLabel}>Image</ThemedText>
+          <ThemedView style={styles.imageButtonContainer}>
+            <Button 
+              mode="outlined" 
+              onPress={() => pickImage('camera')}
+              icon="camera"
+              style={styles.imageButton}
+            >
+              Camera
+            </Button>
+            <Button 
+              mode="outlined" 
+              onPress={() => pickImage('library')}
+              icon="image-album"
+              style={styles.imageButton}
+            >
+              Gallery
+            </Button>
+          </ThemedView>
           {formData.image && (
             <Image source={{ uri: formData.image }} style={styles.pickedImage} />
           )}
@@ -390,24 +409,12 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   imageButton: {
-    marginVertical: 8,
+    flex: 1,
   },
   pickedImage: {
     width: '100%',
     height: 200,
     borderRadius: 8,
-  },
-  lowPriority: {
-    backgroundColor: '#e8f5e9',
-  },
-  mediumPriority: {
-    backgroundColor: '#fff3e0',
-  },
-  highPriority: {
-    backgroundColor: '#ffebee',
-  },
-  segmentedButtons: {
-    marginBottom: 8,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -440,13 +447,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
   logoImage: {
     height: 120,
     width: 120,
@@ -460,16 +460,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
-  priorityButton: {
-    flex: 1,
-    borderRadius: 8,
-  },
-  priorityButtonLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  priorityButtonContent: {
-    flexDirection: 'column',
-    height: 70,
+  imageButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
   },
 });
+
