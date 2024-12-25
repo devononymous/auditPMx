@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "YourAppName",
+    "name": "auditEX",
     "slug": "your-app-slug",
     "version": "1.0.0",
     "sdkVersion": "48.0.0",
@@ -8,6 +8,10 @@
       "ios",
       "android"
     ],
+    "permissions": [
+    "CAMERA",
+    "MEDIA_LIBRARY"
+  ],
     "entryPoint": "./src/index.tsx",
     "assets": [
       "./assets/images/splashscreen_logo.png"
