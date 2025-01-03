@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Image, StyleSheet } from 'react-native';
+import { Image, StyleSheet, Text } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import XLSX from 'xlsx';
-import * as ImageManipulator from 'expo-image-manipulator';
-
+import styles from './styles';
 import { FormData } from '@/src/types';
 import { saveEntries, loadEntries } from '@/src/utils/storage';
 import { PriorityButton } from '@/src/components/PriorityButton';
@@ -39,48 +38,49 @@ const priorityConfig = {
   }
 };
 
-const getFileExtension = (filename: string) => {
-  const lastDot = filename.lastIndexOf('.');
-  if (lastDot === -1) return ''; // Handle edge cases where there's no file extension
-  return filename.slice(lastDot + 1).toLowerCase();
-};
-
 export default function HomeScreen() {
   const [formData, setFormData] = useState<FormData>(initialFormState);
   const [savedEntries, setSavedEntries] = useState<FormData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
+    const loadData = async () => {
+      try {
+        const entries = await loadEntries();
+        if (mounted) {
+          setSavedEntries(entries);
+        }
+      } catch (error) {
+        console.error('Error loading entries:', error);
+        if (mounted) {
+          alert('Failed to load saved entries');
+        }
+      }
+    };
+
     loadData();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const loadData = async () => {
-    try {
-      const entries = await loadEntries();
-      setSavedEntries(entries);
-    } catch (error) {
-      console.error('Error loading entries:', error);
-      alert('Failed to load saved entries');
-    }
-  };
-
-  const pickImage = async (sourceType: 'camera' | 'library') => {
-    const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const validateImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       alert('Sorry, we need camera roll permissions to make this work!');
-      return;
+      return false;
     }
+    return true;
+  };
 
-    if (sourceType === 'camera') {
-      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      if (cameraStatus !== 'granted') {
-        alert('Sorry, we need camera permissions to take a picture!');
-        return;
-      }
-    }
-
+  const pickImage = async () => {
+    if (!(await validateImage())) return;
     setIsImageLoading(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -91,13 +91,10 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled) {
-        const manipulatedImage = await ImageManipulator.manipulateAsync(
-          result.assets[0].uri,
-          [{ resize: { width: 800 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        
-        setFormData(prev => ({ ...prev, image: manipulatedImage.uri }));
+        setFormData(prev => ({
+          ...prev,
+          image: result.assets[0].uri
+        }));
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -107,12 +104,20 @@ export default function HomeScreen() {
     }
   };
 
-  const handleSave = async () => {
-    if (!formData.slNo.trim() || !formData.location.trim() || !formData.priority.trim()) {
-      alert('Please fill in all required fields.');
-      return;
+  const validateForm = () => {
+    const errors = [];
+    if (!formData.slNo.trim()) errors.push('Serial Number');
+    if (!formData.location.trim()) errors.push('Location');
+    
+    if (errors.length > 0) {
+      alert(`Please fill in the following required fields:\n${errors.join('\n')}`);
+      return false;
     }
+    return true;
+  };
 
+  const handleSave = async () => {
+    if (!validateForm()) return;
     setIsSaving(true);
     try {
       const newEntries = [...savedEntries, formData];
@@ -130,17 +135,10 @@ export default function HomeScreen() {
 
   const handleAddNew = () => {
     if (Object.values(formData).some(value => value && value !== 'low')) {
-      Alert.alert(
-        'Start New Entry',
-        'Are you sure you want to start a new entry? Current data will be lost.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes', onPress: () => setFormData(initialFormState) },
-        ]
-      );
-    } else {
-      setFormData(initialFormState);
+      const confirm = window.confirm('Are you sure you want to start a new entry? Current data will be lost.');
+      if (!confirm) return;
     }
+    setFormData(initialFormState);
   };
 
   const exportToExcel = async () => {
@@ -150,40 +148,39 @@ export default function HomeScreen() {
     }
     setIsExporting(true);
     try {
-      const exportData = await Promise.all(savedEntries.map(async (entry) => {
-        let imageBase64 = '';
-        let imageExtension = '';
-        if (entry.image) {
-          const imageFile = await FileSystem.readAsStringAsync(entry.image, { encoding: FileSystem.EncodingType.Base64 });
-          imageExtension = getFileExtension(entry.image);
-          imageBase64 = `data:image/${imageExtension};base64,${imageFile}`;
-        }
-        return {
-          'Sl No': entry.slNo,
-          'Location': entry.location,
-          'Observation': entry.observation,
-          'Priority': entry.priority,
-          'Recommendation': entry.recommendation,
-          'Status': entry.status,
-          'Entry Date': new Date().toLocaleDateString(),
-          'Image': imageBase64
-        };
+      const exportData = savedEntries.map((entry, index) => ({
+        'Sl No': entry.slNo,
+        'Location': entry.location,
+        'Observation': entry.observation,
+        'Priority': entry.priority,
+        'Recommendation': entry.recommendation,
+        'Status': entry.status,
+        'Image': entry.image || 'No Image', // Use image URI directly
+        'Entry Date': new Date().toLocaleDateString()
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Audit Entries');
       
-      ws['!cols'] = [
-        { wch: 10 }, { wch: 20 }, { wch: 40 }, { wch: 15 },
-        { wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 50 }
+      // Define column widths, adjust the width for the image column
+      const colWidths = [
+        { wch: 10 },
+        { wch: 20 },
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 40 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 30 } // Adjust width for the image column
       ];
-      ws['!rows'] = exportData.map(() => ({ hpt: 150 }));
+      ws['!cols'] = colWidths;
 
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+
       const fileName = `audit_entries_${new Date().toISOString().split('T')[0]}.xlsx`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
-      
+
       await FileSystem.writeAsStringAsync(filePath, wbout, {
         encoding: FileSystem.EncodingType.Base64
       });
@@ -206,7 +203,12 @@ export default function HomeScreen() {
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={<Image source={require('@/assets/images/splashscreen_logo.png')} style={styles.logoImage} />}>
+      headerImage={
+        <Image
+          source={require('@/assets/images/splashscreen_logo.png')}
+          style={styles.logoImage}
+        />
+      }>
       <ThemedView style={styles.formContainer}>
         <ThemedView style={styles.headerSection}>
           <ThemedText style={styles.formTitle}>Audit Entry Form</ThemedText>
@@ -247,26 +249,16 @@ export default function HomeScreen() {
           />
           
           <ThemedText style={styles.fieldLabel}>Image</ThemedText>
-          <ThemedView style={styles.buttonContainer}>
-            <Button 
-              mode="outlined" 
-              onPress={() => pickImage('camera')}
-              icon="camera"
-              style={styles.imageButton}
-            >
-              Camera
-            </Button>
-            <Button 
-              mode="outlined" 
-              onPress={() => pickImage('library')}
-              icon="image-album"
-              style={styles.imageButton}
-            >
-              Gallery
-            </Button>
-          </ThemedView>
+          <Button 
+            mode="outlined" 
+            onPress={pickImage}
+            icon="camera"
+            style={styles.imageButton}
+          >
+            {formData.image ? 'Change Image' : 'Add Image'}
+          </Button>
           {formData.image && (
-            <Image source={{ uri: formData.image }} style={styles.pickedImage} />
+            <Image source={{ uri: formData.image }} style={{ width: 100, height: 100, marginTop: 10 }} />
           )}
         </ThemedView>
 
@@ -315,7 +307,7 @@ export default function HomeScreen() {
             mode="contained"
             onPress={handleSave}
             style={styles.actionButton}
-            icon="content-save"
+            icon=" content-save"
             loading={isSaving}
             disabled={isSaving}
           >
@@ -356,89 +348,3 @@ export default function HomeScreen() {
     </ParallaxScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  formContainer: {
-    padding: 16,
-    gap: 24,
-  },
-  headerSection: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  formSubtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-  },
-  section: {
-    gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    marginBottom: 4,
-    opacity: 0.8,
-  },
-  input: {
-    backgroundColor: 'transparent',
-  },
-  textArea: {
-    backgroundColor: 'transparent',
-    minHeight: 100,
-  },
-  imageButton: {
-    flex: 1,
-  },
-  pickedImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  exportSection: {
-    gap: 16,
-  },
-  savedEntriesCard: {
-    padding: 16,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 8,
-  },
-  savedEntriesText: {
-    fontSize: 14,
-    opacity: 0.8,
-  },
-  exportButton: {
-    marginTop: 16,
-  },
-  priorityContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  logoImage: {
-    width: '100%',
-    height: 50,
-    resizeMode: 'contain',
-  },
-});
