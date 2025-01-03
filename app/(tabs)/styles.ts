@@ -9,6 +9,17 @@ import { StyleSheet } from "react-native";
     alignItems: 'center',
     marginBottom: 8,
   },
+    imageButton: {
+    marginVertical: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  image: {
+    width: 100,
+    height: 100,
+    marginTop: 10,
+  },
   formTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -42,9 +53,6 @@ import { StyleSheet } from "react-native";
   textArea: {
     backgroundColor: 'transparent',
     minHeight: 100,
-  },
-  imageButton: {
-    marginVertical: 8,
   },
   pickedImage: {
     width: '100%',
